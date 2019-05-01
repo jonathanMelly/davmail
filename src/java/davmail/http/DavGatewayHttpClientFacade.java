@@ -31,6 +31,7 @@ import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.cookie.CookiePolicy;
 import org.apache.commons.httpclient.methods.DeleteMethod;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpMethodParams;
 import org.apache.commons.httpclient.util.IdleConnectionTimeoutThread;
@@ -348,6 +349,30 @@ public final class DavGatewayHttpClientFacade {
     }
 
     private static int executeMethod(HttpClient httpClient, HttpMethod currentMethod) throws IOException {
+
+        //if(currentMethod.getQueryString())
+        LOGGER.debug("Executing HTTP - "+currentMethod.getQueryString());
+        if(currentMethod instanceof PostMethod)
+        {
+            PostMethod pm = (PostMethod) currentMethod;
+
+            pm.addRequestHeader("Connection","keep-alive");
+
+            LOGGER.debug("Current Status: "+pm.getStatusLine());
+
+            for(NameValuePair np : pm.getParameters() )
+            {
+                LOGGER.debug("Param: "+np.getName()+" -> "+np.getValue());
+            }
+            for(Cookie cookie: httpClient.getState().getCookies())
+            {
+                LOGGER.debug("Cookies: "+cookie.getName());
+            }
+
+
+
+        }
+
         httpClient.executeMethod(currentMethod);
         int status = currentMethod.getStatusCode();
         if ((status == HttpStatus.SC_UNAUTHORIZED || status == HttpStatus.SC_PROXY_AUTHENTICATION_REQUIRED)
@@ -356,6 +381,12 @@ public final class DavGatewayHttpClientFacade {
             resetMethod(currentMethod);
             addNTLM(httpClient);
             status = httpClient.executeMethod(currentMethod);
+        }
+        
+        LOGGER.debug("Result : "+currentMethod.getStatusLine());
+        for(Header header : currentMethod.getResponseHeaders())
+        {
+            LOGGER.debug("Header: "+header.getName()+"->"+header.getValue());
         }
         return status;
     }

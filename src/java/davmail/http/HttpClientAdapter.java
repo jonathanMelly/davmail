@@ -25,7 +25,9 @@ import davmail.exception.HttpNotFoundException;
 import davmail.exception.HttpPreconditionFailedException;
 import davmail.exception.HttpServerErrorException;
 import davmail.exception.LoginTimeoutException;
+import davmail.http.request.GetRequest;
 import org.apache.commons.httpclient.HttpException;
+import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -33,6 +35,7 @@ import org.apache.http.auth.AuthSchemeProvider;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.NTCredentials;
 import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.config.AuthSchemes;
 import org.apache.http.client.config.RequestConfig;
@@ -341,6 +344,10 @@ public class HttpClientAdapter {
             request.setURI(URIUtils.resolve(uri, requestURI));
         }
         uri = request.getURI();
+
+        LOGGER.debug("HTTP REQ : "+request.getMethod()+" "+request.getURI());
+
+
         CloseableHttpResponse response = httpClient.execute(request, context);
         if (request instanceof ResponseHandler) {
             try {
@@ -373,6 +380,9 @@ public class HttpClientAdapter {
             LOGGER.debug("Redirect " + request.getURI() + " to " + location);
             // replace uri with target location
             request.setURI(URI.create(location));
+
+            //GetRequest gr = new GetRequest(request.getURI());
+
             httpResponse = execute(request);
         }
 
@@ -472,5 +482,10 @@ public class HttpClientAdapter {
 
     public String getHost() {
         return uri.getHost();
+    }
+
+    public HttpClient getHttpClient()
+    {
+        return httpClient;
     }
 }

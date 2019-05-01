@@ -26,20 +26,15 @@ import davmail.exception.WebdavNotAvailableException;
 import davmail.http.DavGatewayHttpClientFacade;
 import davmail.http.DavGatewayOTPPrompt;
 import davmail.util.StringUtil;
-import org.apache.commons.httpclient.Cookie;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpMethod;
-import org.apache.commons.httpclient.URI;
-import org.apache.commons.httpclient.URIException;
+import org.apache.commons.httpclient.*;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.params.HttpClientParams;
+import org.apache.commons.httpclient.params.HttpMethodParams;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.http.HttpStatus;
 import org.apache.log4j.Logger;
-import org.htmlcleaner.CommentNode;
-import org.htmlcleaner.ContentNode;
-import org.htmlcleaner.HtmlCleaner;
-import org.htmlcleaner.TagNode;
+import org.htmlcleaner.*;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -93,6 +88,7 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
         TOKEN_FIELDS.add("SafeWordPassword");
         TOKEN_FIELDS.add("passcode");
     }
+	
 
 
     /**
@@ -277,11 +273,25 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
                         || "UserContext".equals(cookie.getName())
                         // Direct EWS access
                         || "exchangecookie".equals(cookie.getName())
+                        //VD
+                        || "FedAuth".equalsIgnoreCase(cookie.getName())
+                        //VD APRÈS PREMIER FORMULAIRE
+                        /*|| "MSISAuthenticated".equalsIgnoreCase(cookie.getName()*/
                 ) {
                     authenticated = true;
                     break;
                 }
             }
+                    /*
+            //Look for cookie direct in response header...
+            for(Header header :method.getResponseHeaders("Set-Cookie"))
+            {
+                if(header.getValue().startsWith("FedAuth"))
+                {
+                    authenticated=true;
+                    break;
+                }
+            }  */
         }
         return authenticated;
     }
@@ -307,12 +317,18 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
      * @return logon method
      * @throws IOException on error
      */
-    protected HttpMethod buildLogonMethod(HttpClient httpClient, HttpMethod initmethod) throws IOException {
+    public HttpMethod buildLogonMethod(HttpClient httpClient, HttpMethod initmethod) throws IOException {
 
         HttpMethod logonMethod = null;
 
         // create an instance of HtmlCleaner
-        HtmlCleaner cleaner = new HtmlCleaner();
+        final CleanerProperties props = new CleanerProperties();
+        //needed for custom form auth (2nd form post with xml in attribute...)
+        props.setAllowMultiWordAttributes(true);
+        props.setAllowHtmlInsideAttributes(true);
+        props.setTranslateSpecialEntities(false);
+        props.setAdvancedXmlEscape(false);
+        HtmlCleaner cleaner = new HtmlCleaner(props);
 
         // A OTP token authentication form in a previous page could have username fields with different names
         usernameInputs.clear();
@@ -320,19 +336,28 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
         try {
             TagNode node = cleaner.clean(initmethod.getResponseBodyAsStream());
             List forms = node.getElementListByName("form", true);
+			
+			//LOGGER.debug("forms"+forms);
+			
             TagNode logonForm = null;
             // select form
             if (forms.size() == 1) {
                 logonForm = (TagNode) forms.get(0);
+                //LOGGER.debug("LogonForm found: "+logonForm.getAttributeByName("id"));
             } else if (forms.size() > 1) {
                 for (Object form : forms) {
                     if ("logonForm".equals(((TagNode) form).getAttributeByName("name"))) {
+                        logonForm = ((TagNode) form);
+                    }
+                    else if ("loginForm".equals(((TagNode) form).getAttributeByName("id"))) {
                         logonForm = ((TagNode) form);
                     }
                 }
             }
             if (logonForm != null) {
                 String logonMethodPath = logonForm.getAttributeByName("action");
+
+                LOGGER.debug("Logon form found, name="+logonForm.getAttributeByName("name")+",id="+logonForm.getAttributeByName("id")+" action="+logonMethodPath);
 
                 // workaround for broken form with empty action
                 if (logonMethodPath != null && logonMethodPath.length() == 0) {
@@ -348,8 +373,13 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
                     String type = ((TagNode) input).getAttributeByName("type");
                     String name = ((TagNode) input).getAttributeByName("name");
                     String value = ((TagNode) input).getAttributeByName("value");
+
                     if ("hidden".equalsIgnoreCase(type) && name != null && value != null) {
-                        ((PostMethod) logonMethod).addParameter(name, value);
+                        String adaptedValue = StringEscapeUtils.unescapeHtml4(value);
+                        adaptedValue=adaptedValue.replaceAll(" ","+");
+                        
+                        ((PostMethod) logonMethod).addParameter(name, adaptedValue);
+                        
                     }
                     // custom login form
                     if (USER_NAME_FIELDS.contains(name)) {
@@ -464,6 +494,10 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
 
                 // if logonMethod is not null, try to follow redirection
                 logonMethod = DavGatewayHttpClientFacade.executeFollowRedirects(httpClient, logonMethod);
+
+                //TODO log request executed
+
+
                 checkFormLoginQueryString(logonMethod);
                 // also check cookies
                 if (!isAuthenticated(logonMethod)) {
@@ -584,6 +618,13 @@ public class ExchangeFormAuthenticator implements ExchangeAuthenticator {
             ((PostMethod) logonMethod).addParameter("trusted", "4");
             ((PostMethod) logonMethod).addParameter("flags", "4");
         }
+		
+        //custom JMY
+        /*
+        ((PostMethod) logonMethod).removeParameter("AuthMethod");
+		((PostMethod) logonMethod).addParameter("AuthMethod", "FormsAuthentication");
+
+         */
     }
 
     protected String getAbsoluteUri(HttpMethod method, String path) throws URIException {

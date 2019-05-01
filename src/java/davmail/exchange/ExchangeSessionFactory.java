@@ -25,6 +25,8 @@ import davmail.exception.DavMailException;
 import davmail.exception.WebdavNotAvailableException;
 import davmail.exchange.auth.ExchangeAuthenticator;
 import davmail.exchange.auth.ExchangeFormAuthenticator;
+import davmail.exchange.auth.HC4ExchangeFormAuthenticator;
+import davmail.exchange.auth.HtmlUnitFormAuthenticator;
 import davmail.exchange.dav.DavExchangeSession;
 import davmail.exchange.ews.EwsExchangeSession;
 import davmail.http.DavGatewayHttpClientFacade;
@@ -186,7 +188,7 @@ public final class ExchangeSessionFactory {
                         DavGatewayHttpClientFacade.addNTLM(httpClient);
                         session = new EwsExchangeSession(httpClient, poolKey.userName);
                     } else {
-                        ExchangeSession.LOGGER.debug("OWA authentication in EWS mode");
+                        /*ExchangeSession.LOGGER.debug("OWA authentication in EWS mode");
                         ExchangeFormAuthenticator exchangeFormAuthenticator = new ExchangeFormAuthenticator();
                         exchangeFormAuthenticator.setUrl(poolKey.url);
                         exchangeFormAuthenticator.setUsername(poolKey.userName);
@@ -194,6 +196,32 @@ public final class ExchangeSessionFactory {
                         exchangeFormAuthenticator.authenticate();
                         session = new EwsExchangeSession(exchangeFormAuthenticator.getHttpClient(),
                                 exchangeFormAuthenticator.getExchangeUri(), exchangeFormAuthenticator.getUsername());
+
+                         */
+
+                        //hc4
+                        /*ExchangeSession.LOGGER.debug("OWA authentication in EWS mode -- HC4");
+                        HC4ExchangeFormAuthenticator exchangeFormAuthenticator = new HC4ExchangeFormAuthenticator();
+                        exchangeFormAuthenticator.setUrl(poolKey.url);
+                        exchangeFormAuthenticator.setUsername(poolKey.userName);
+                        exchangeFormAuthenticator.setPassword(poolKey.password);
+                        exchangeFormAuthenticator.authenticate();
+                        session = new EwsExchangeSession(exchangeFormAuthenticator.getHttpClientAdapter(),
+                                exchangeFormAuthenticator.getExchangeUri(), exchangeFormAuthenticator.getUsername());*/
+
+                        //htmlunit
+                        ExchangeSession.LOGGER.debug("OWA authentication in EWS mode -- HtmlUnit");
+                        HtmlUnitFormAuthenticator exchangeFormAuthenticator = new HtmlUnitFormAuthenticator();
+                        exchangeFormAuthenticator.setUrl(poolKey.url);
+                        exchangeFormAuthenticator.setUsername(poolKey.userName);
+                        exchangeFormAuthenticator.setPassword(poolKey.password);
+                        exchangeFormAuthenticator.authenticate();
+
+                        session = new EwsExchangeSession(exchangeFormAuthenticator.getHttpClientAdapter(),
+                                exchangeFormAuthenticator.getExchangeUri(), "jonathan.melly@vd.ch");
+
+
+                        
                     }
                 } else {
                     ExchangeFormAuthenticator exchangeFormAuthenticator = new ExchangeFormAuthenticator();

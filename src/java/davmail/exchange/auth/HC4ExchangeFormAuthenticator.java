@@ -29,6 +29,8 @@ import davmail.http.HttpClientAdapter;
 import davmail.http.request.GetRequest;
 import davmail.http.request.PostRequest;
 import davmail.util.StringUtil;
+import org.apache.commons.httpclient.methods.PostMethod;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -39,10 +41,7 @@ import org.apache.http.cookie.Cookie;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.log4j.Logger;
-import org.htmlcleaner.CommentNode;
-import org.htmlcleaner.ContentNode;
-import org.htmlcleaner.HtmlCleaner;
-import org.htmlcleaner.TagNode;
+import org.htmlcleaner.*;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -282,6 +281,10 @@ public class HC4ExchangeFormAuthenticator implements ExchangeAuthenticator {
                         || "UserContext".equals(cookie.getName())
                         // Direct EWS access
                         || "exchangecookie".equals(cookie.getName())
+                        //VD
+                        || "FedAuth".equalsIgnoreCase(cookie.getName())
+                    //VD APRÈS PREMIER FORMULAIRE
+                    /*|| "MSISAuthenticated".equalsIgnoreCase(cookie.getName()*/
                 ) {
                     authenticated = true;
                     break;
@@ -317,7 +320,14 @@ public class HC4ExchangeFormAuthenticator implements ExchangeAuthenticator {
         PostRequest logonMethod = null;
 
         // create an instance of HtmlCleaner
-        HtmlCleaner cleaner = new HtmlCleaner();
+        // create an instance of HtmlCleaner
+        final CleanerProperties props = new CleanerProperties();
+        //needed for custom form auth (2nd form post with xml in attribute...)
+        props.setAllowMultiWordAttributes(true);
+        props.setAllowHtmlInsideAttributes(true);
+        props.setTranslateSpecialEntities(false);
+        props.setAdvancedXmlEscape(false);
+        HtmlCleaner cleaner = new HtmlCleaner(props);
 
         // A OTP token authentication form in a previous page could have username fields with different names
         usernameInputs.clear();
@@ -334,10 +344,17 @@ public class HC4ExchangeFormAuthenticator implements ExchangeAuthenticator {
                     if ("logonForm".equals(((TagNode) form).getAttributeByName("name"))) {
                         logonForm = ((TagNode) form);
                     }
+                    else if ("loginForm".equals(((TagNode) form).getAttributeByName("id"))) {
+                        logonForm = ((TagNode) form);
+                    }
                 }
             }
             if (logonForm != null) {
+                
+
                 String logonMethodPath = logonForm.getAttributeByName("action");
+
+                LOGGER.debug("Logon form found, name="+logonForm.getAttributeByName("name")+",id="+logonForm.getAttributeByName("id")+" action="+logonMethodPath);
 
                 // workaround for broken form with empty action
                 if (logonMethodPath != null && logonMethodPath.length() == 0) {
@@ -354,12 +371,17 @@ public class HC4ExchangeFormAuthenticator implements ExchangeAuthenticator {
                     String name = ((TagNode) input).getAttributeByName("name");
                     String value = ((TagNode) input).getAttributeByName("value");
                     if ("hidden".equalsIgnoreCase(type) && name != null && value != null) {
-                        ((PostRequest) logonMethod).setParameter(name, value);
+                        //((PostRequest) logonMethod).setParameter(name, value);
+
+                        String adaptedValue = StringEscapeUtils.unescapeHtml4(value);
+                        adaptedValue=adaptedValue.replaceAll(" ","+");
+
+                        ((PostRequest) logonMethod).setParameter(name, adaptedValue);
                     }
                     // custom login form
-                    if (USER_NAME_FIELDS.contains(name)) {
+                    if (USER_NAME_FIELDS.contains(name.toLowerCase())) {
                         usernameInputs.add(name);
-                    } else if (PASSWORD_FIELDS.contains(name)) {
+                    } else if (PASSWORD_FIELDS.contains(name.toLowerCase())) {
                         passwordInput = name;
                     } else if ("addr".equals(name)) {
                         // this is not a logon form but a redirect form
@@ -601,6 +623,14 @@ public class HC4ExchangeFormAuthenticator implements ExchangeAuthenticator {
             ((PostRequest) logonMethod).setParameter("trusted", "4");
             ((PostRequest) logonMethod).setParameter("flags", "4");
         }
+
+
+        //custom JMY
+
+        ((PostRequest) logonMethod).removeParameter("AuthMethod");
+		((PostRequest) logonMethod).setParameter("AuthMethod", "FormsAuthentication");
+
+
     }
 
     protected URI getAbsoluteUri(URI uri, String path) throws URISyntaxException {
